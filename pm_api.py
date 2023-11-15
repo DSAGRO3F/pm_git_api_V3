@@ -144,6 +144,7 @@ def spec_values(dfx):
 
 new_dfx = spec_values(dfx)
 print("new_dfx.shape: {}".format(new_dfx.shape))
+print('new_dfx: {}'.format(new_dfx[0:10]))
 
 
 # 7. Calcul valeurs "peak"
@@ -181,19 +182,19 @@ df_failure = df_failure.rename(columns={'DATE': 'FAILURE_DATE'})
 df.sort_values(by='ID', inplace=True, ascending=True)
 df_failure.sort_values(by='ID', inplace=True, ascending=True)
 
-df = df.merge(df_failure, on='ID', how='left')
+df_merged = df.merge(df_failure, on='ID', how='left')
 
-df['TIME_TO_FAILURE'] = df['FAILURE_DATE'] - df['START_DATE']
-df['TIME_TO_FAILURE'] = df['TIME_TO_FAILURE'] / np.timedelta64(1, 'D')
+df_merged['TIME_TO_FAILURE'] = df_merged['FAILURE_DATE'] - df_merged['START_DATE']
+df_merged['TIME_TO_FAILURE'] = df_merged['TIME_TO_FAILURE'] / np.timedelta64(1, 'D')
 
 # Check...
-print("df['TIME_TO_FAILURE'][0:2]: {}".format(df['TIME_TO_FAILURE'][0:2]))
-print(df.loc[1, ['ID', 'START_DATE', 'DATE', 'FAILURE_DATE', 'TIME_TO_FAILURE']])
+print("df['TIME_TO_FAILURE'][0:2]: {}".format(df_merged['TIME_TO_FAILURE'][0:2]))
+print(df_merged.loc[1, ['ID', 'START_DATE', 'DATE', 'FAILURE_DATE', 'TIME_TO_FAILURE']])
 
-df['FAILURE_TGT'] = np.where((df['TIME_TO_FAILURE'] < window_tgt) & (df['TIME_TO_FAILURE'] >= 0), 1, 0)
+df_merged['FAILURE_TGT'] = np.where((df_merged['TIME_TO_FAILURE'] < window_tgt) & (df_merged['TIME_TO_FAILURE'] >= 0), 1, 0)
 # Comptage des valeurs 0 et 1:
-print('Nombre de valeurs à 0: {}'.format(df['FAILURE_TGT'].value_counts()[0] / len(df)))
-print('Nombre de valeurs à 1: {}'.format(df['FAILURE_TGT'].value_counts()[1] / len(df)))
+print('Nombre de valeurs à 0: {}'.format(df_merged['FAILURE_TGT'].value_counts()[0] / len(df_merged)))
+print('Nombre de valeurs à 1: {}'.format(df_merged['FAILURE_TGT'].value_counts()[1] / len(df_merged)))
 
 # 2ème étape: utilisation de SMOTE pour meilleur équilibrage du dataset.
 # on définit une méthode pour déterminer qu'une observation fera partie du train set, du validation ou du test set.
@@ -204,7 +205,7 @@ print('Nombre de valeurs à 1: {}'.format(df['FAILURE_TGT'].value_counts()[1] / 
 # Puis, en faisant un merge des df "pd_id" et "df", on obtient un df pour lequel tous les équipements sont tagés "Training", ou "Test".
 
 # Get a Unique List of All IDs
-df_temp = df
+df_temp = df_merged
 df_id = df_temp.drop_duplicates(subset='ID')
 df_id = df_id[['ID']]
 
@@ -220,17 +221,17 @@ tips_summed = df_id.groupby(['MODELING_GROUP'])['random_val'].count()
 print(tips_summed)
 
 # Attribution des tag à chaque équipement, merge des df.
-df = df.sort_values(by=['ID'], ascending=[True])
+df_merged = df_merged.sort_values(by=['ID'], ascending=[True])
 df_id = df_id.sort_values(by=['ID'], ascending=[True])
-df = df.merge(df_id, on=['ID'], how='inner')
+new_df = df_merged.merge(df_id, on=['ID'], how='inner')
 
-tips_summed_1 = df.groupby(['MODELING_GROUP'])['random_val'].count()
+tips_summed_1 = new_df.groupby(['MODELING_GROUP'])['random_val'].count()
 print(tips_summed_1)
 
 # Méthode SMOTE pour équilibrage du dataset.
 # Disparité des valeurs de défaillance et non défaillance.
 
-print(df['EQUIPMENT_FAILURE'].value_counts())
+print(new_df['EQUIPMENT_FAILURE'].value_counts())
 
 # Features non nécessaires à l'entrainement des modèles mais nécessaires dans des phases ulérieures: les dates.
 features = ['ID', 'MODELING_GROUP', 'EQUIPMENT_FAILURE',
@@ -265,75 +266,34 @@ training_features = ['ID', 'EQUIPMENT_FAILURE',
                      'S5_peak', 'S16_peak', 'S19_peak', 'S18_peak', 'S8_peak']
 
 # Construction des data sets.
-df = df.sort_values(by=['ID', 'DATE'], ascending=[True, True])
+df_features = new_df[features]
+df_features = df_features.sort_values(by=['ID', 'DATE'], ascending=[True, True])
+df_features = df_features[df_features['MODELING_GROUP'] != 'TRAINING']
+print('df_features: {}'.format(df_features[0:10]))
 
-df_test_val_full = df[df['MODELING_GROUP'] != 'TRAINING']
-df_test_val = df_test_val_full[training_features]
+
+df_test_val = df_features[training_features]
 y_test_val = df_test_val['EQUIPMENT_FAILURE']
 X_test_val = df_test_val.drop(columns=['EQUIPMENT_FAILURE'], axis=1)
-print("X_test_val ==> {}".format(X_test_val[0:2]))
+print('X_test_val: {}'.format(X_test_val[0:10]))
 
-
-df_training = df[df['MODELING_GROUP'] == 'TRAINING']
-#df_training = df_training.drop('MODELING_GROUP', axis=1)
-
-X_train = df_training[training_features]
-y_train = X_train['EQUIPMENT_FAILURE']
-X_train = X_train.drop(columns=['EQUIPMENT_FAILURE'], axis=1)
-
-df_train_test = df[df['MODELING_GROUP'] != 'VALIDATION']
-#df_train_test = df_train_test.drop('MODELING_GROUP', axis=1)
-
-X_train_test = df_train_test[training_features]
-y_train_test = X_train_test['EQUIPMENT_FAILURE']
-X_train_test = X_train_test.drop(['EQUIPMENT_FAILURE'], axis=1)
-
-df_total = df
-df_total = df_total[training_features]
-
-y_total = df_total['EQUIPMENT_FAILURE']
-X_total = df_total.drop(['EQUIPMENT_FAILURE'], axis=1)
 
 # Prints
-print('dimension test & validation sets: {}'.format(X_test_val.shape))
+print('df_features.shape: {}'.format(df_features.shape))
+print('df_test_val.shape: {}'.format(df_test_val.shape))
+print("X_test_val.shape ==> {}".format(X_test_val.shape))
 print('dimension y_test_val: {}'.format(y_test_val.shape))
-print()
-print('dimension X_train: {}'.format(X_train.shape))
-print('dimension y_train: {}'.format(y_train.shape))
-print()
-print('dimension X_train_test: {}'.format(X_train_test.shape))
-print('dimension y_train_test: {}'.format(y_train_test.shape))
-print()
-print('dimension X_total: {}'.format(X_total.shape))
-print('dimension y_total: {}'.format(y_total.shape))
-
-
-# Chargement des data
-# df_open = open(df_path, 'rb')
-# df = pickle.load(df_open)
-# df = df[0:730]
-
-# df_total_open = open(df_total_path, 'rb')
-# df_total = pickle.load(df_total_open)
-#
-# X_total_open = open(X_total_path, 'rb')
-# X_total = pickle.load(X_total_open)
-#
-# y_total_open = open(y_total_path, 'rb')
-# y_total = pickle.load(y_total_open)
 
 
 # Construction fonction pour obtention dataframe df par app. dashbord
 @app.route('/df', methods=['GET'])
 def get_df():
-    print('df: {}'.format(df_test_val_full[0:2]))
-    print(df_test_val_full.columns)
-    d_df = df_test_val_full.to_dict()
-    jsonified = jsonify(d_df)
-    # print(type(jsonified))
-    # print('d_df: {}'.format(d_df['ID']))
+    print('df: {}'.format(df_features[0:2]))
+    print(df_features.columns)
+    d_df = df_features.to_dict()
+    json_format = jsonify(d_df)
 
-    return jsonified
+    return json_format
 
 
 # Définition des features pour analyse temporelle des capteurs
@@ -343,53 +303,29 @@ sensor_feat = ['ID', 'DATE', 'S13', 'S15', 'S16', 'S17', 'S18', 'S19', 'S5', 'S8
 # Construction liste des Id équipements.
 @app.route('/id', methods=['GET'])
 def liste_id():
-    ids = df_test_val_full.loc[:, 'ID'].values.tolist()
+    ids = df_features.loc[:, 'ID'].values.tolist()
     unique_ids = np.unique(ids)
     unique_ids = unique_ids.tolist()
     return jsonify(unique_ids)
 
 
-l_avg = []
-l_min = []
-l_max = []
-
 df_basic = df.loc[:, ['ID', 'S13', 'S15', 'S16', 'S17', 'S18', 'S19', 'S5', 'S8']]
-
-
-# print('df_info: {}'.format(df.info()))
 
 
 # Construction valeurs spécifiques capteurs
 @app.route('/sensors_data/<id>', methods=['GET'])
 def get_sensors_data(id):
     # print('valeur_id: {}'.format(id))
-    df_test_val_full['ID'] = df_test_val_full['ID'].astype('int')
-    # print(df['ID'].dtypes)
-
-    # df_sensors_data = df[sensor_feat]
-    # print(df_sensors_data['ID'].dtypes)
-    #      # print(df_sensors_data['DATE'].dtypes)
+    df_features['ID'] = df_features['ID'].astype('int')
 
     # Sélection de l'équipement
-    df_selected_eq = df_test_val_full[df_test_val_full['ID'] == int(id)]
+    df_selected_eq = df_features[df_features['ID'] == int(id)]
     # print(df_selected_eq)
 
-    # Pour chq capteur calculer moyenne, min, max, val. pic, rolling.mean()
+    # Pour chq capteur calculer rolling.mean()
     l_sensors = ['S13', 'S15', 'S16', 'S17', 'S18', 'S19', 'S5', 'S8']
 
-    # 4. Construction valeurs pic
-    # peak_features = ['peak_' + name for name in l_sensors]
-
-    # for i in range(len(peak_features)):
-    #     feat_name = l_sensors[i]
-    #     new_feat_name = peak_features[i]
-    #     df_temp_1 = df_selected_eq.copy()
-    #     avg_val = df_temp_1[feat_name].mean(axis=0)
-    #     df_temp_1[new_feat_name] = df_temp_1[feat_name] / avg_val
-    #     df_selected_eq = df_temp_1
-    # # print('df_selected_eq: {}'.format(df_selected_eq['peak_S13'][0:2]))
-    #
-    # 5. Rolling function:
+    # Rolling function:
     roll_features = [(name + '_roll') for name in l_sensors]
 
     for i in range(len(roll_features)):
@@ -398,8 +334,6 @@ def get_sensors_data(id):
         df_temp_1 = df_selected_eq.copy()
         df_temp_1[new_feat_name] = df_temp_1[feat_name].rolling(window=90).mean()
         df_selected_eq = df_temp_1
-    #
-    # # print('df_selected_eq: {}'.format(df_selected_eq.shape))
 
     # Conversion df en dict
     df_selected_eq = df_selected_eq.to_dict()
@@ -410,9 +344,17 @@ def get_sensors_data(id):
 # Construction fonction qui renvoie X_test.
 
 @app.route('/X_test/<id>', methods=['GET'])
-def X_test_data(id, df=X_test_val, df_2 = df_test_val_full):
-    print("df fonction X_test ==> : {}".format(df[0:2]))
-    df['ID'] = df['ID'].astype('int')
+def X_test_data(id):
+
+    print('X_test_val.shape: {}'.format(X_test_val.shape))
+    print('--------')
+    print('df_features.shape: {}'.format(df_features.shape))
+    print('--------')
+    print("X_test_val ==> : {}".format(X_test_val[0:2]))
+    print('--------')
+    print('X_test_val.columns: {}'.format(X_test_val.columns))
+    print('--------')
+    X_test_val['ID'] = X_test_val['ID'].astype('int')
     # print(df['ID'].dtypes)
 
     # Relevant features for building X_test
@@ -431,43 +373,63 @@ def X_test_data(id, df=X_test_val, df_2 = df_test_val_full):
     #                      'S5_peak', 'S16_peak', 'S19_peak', 'S18_peak', 'S8_peak']
     # X_test = df[training_features]
 
-    # Make predictions on X_Test_val.
+    print(X_test_val.info())
 
+    # Make predictions on X_Test_val.
     # 1. Load model.
     best_model = open(model_path, 'rb')
     best_model = pickle.load(best_model)
 
     # 2. Predictions.
-    y_proba = best_model.predict_proba(df)
+    y_proba = best_model.predict_proba(X_test_val)
     y_pred = y_proba[:, 1]
 
+    #3. Nouvelle variable dataframe
+    df_proba = X_test_val.copy()
+
     # 3. Concaténer y_pred à X_test.
-    df['y_pred'] = y_pred
+    df_proba['y_pred'] = y_pred
+    print('------')
+    print('df_proba.columns_1: {}'.format(df_proba.columns))
+    print('------')
 
     # 4. Cut off
     cut_off = 0.5
     y_pred_cut_off = [0 if val < cut_off else 1 for val in y_pred]
 
     # 5. Concaténer y_pred_cut_off à X_test.
-    df['y_pred_cutoff'] = y_pred_cut_off
+    df_proba['y_pred_cutoff'] = y_pred_cut_off
+    print('df_proba.columns_2: {}'.format(df_proba.columns))
 
     # 6. Concaténer 'DATE' et X_test
-    df = df.sort_values(by=['ID'], ascending=True)
-    dates = df_2['DATE'].to_list()
-    df['DATE'] = dates
-    df['DATE'] = df['DATE'].astype(str)
+    # df_sorted = X_test_val.sort_values(by=['ID'], ascending=True)
+    dates = df_features['DATE'].to_list()
+
+    # # Check DATE format
+    # print('--------')
+    # print('date format: {}'.format(df_features['DATE'].dtypes))
+    # print('--------')
+    # print('liste dates: {}'.format(dates[0:3]))
+    # print('--------')
+    df_proba['DATE'] = dates
+    # print("X_test_val['DATE'][0:3]: {}".format(X_test_val['DATE'][0:3]))
+    # print('--------')
+    df_proba['DATE'] = df_proba['DATE'].astype(str)
+    print('df_proba.columns_3: {}'.format(df_proba.columns))
     # X_test['DATE'] = X_test['DATE'].apply(lambda x: datetime.strptime(x,"%a %b %d %Y %H:%M:%S %Z%z (IST)"))
 
     # 4. Sélectionner l'ensemble des prédictions pour l'équipement "id"
-    X_test_selected_eq = df[df['ID'] == int(id)]
+    df_proba_selected_eq = df_proba[df_proba['ID'] == int(id)]
+    print('df_proba_selected_eq.columns_1: {}'.format(df_proba_selected_eq.columns))
+    print('------')
+    print('df_proba_selected_eq.shape: {}'.format(df_proba_selected_eq.shape))
 
     # 5. Convertir en dictionnaire
-    d_X_test = X_test_selected_eq.to_dict()
+    d_df_proba_eq = df_proba_selected_eq.to_dict()
 
     # 6. Sérialisation.
-    jsonified = jsonify(d_X_test)
-
-    return jsonified
+    json_df_proba_eq = jsonify(d_df_proba_eq)
+    return json_df_proba_eq
 
 
 app.run()
