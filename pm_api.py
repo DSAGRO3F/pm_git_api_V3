@@ -13,17 +13,17 @@ app = flask.Flask(__name__)
 app.config["DEBUG"] = True
 
 # Définition des chemins
+# 1. Chemin data en local:
+# path_data = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/data/'
 
-# 1. Chemin en local:
-# path = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/pm_git/pm_api/'
-
-# 2. Chemin sur git
-path = 'data/'
+# 2. Chemin data sur git
+path_data = 'data/'
 
 
-# Chemin model en local
-# f_model_name = 'best_model.pkl'
-#model_path = path + f_model_name
+# Chemin modele en local
+#path_model = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/pm_git/pm_api/'
+#f_model_name = 'best_model.pkl'
+#model_path = path_model + f_model_name
 
 # Chemin model sur git
 model_path = 'best_model.pkl'
@@ -43,8 +43,8 @@ model_path = 'best_model.pkl'
 data_1 = 'equipment_failure_data_1.csv'
 data_2 = 'equipment_failure_data_2.csv'
 
-path_1 = path + data_1
-path_2 = path + data_2
+path_1 = path_data + data_1
+path_2 = path_data + data_2
 
 # 3. Chargement data
 df_1 = pd.read_csv(path_1, sep=';')
