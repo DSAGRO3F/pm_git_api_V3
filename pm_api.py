@@ -15,44 +15,47 @@ app.config["DEBUG"] = True
 # Définition des chemins
 
 # 1. Chemin en local:
-path = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/pm_git/pm_api/'
+# path = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/pm_git/pm_api/'
+
+# 2. Chemin sur git
+path = 'data/'
+
 
 # Chemin model en local
-f_model_name = 'best_model.pkl'
-model_path = path + f_model_name
+# f_model_name = 'best_model.pkl'
+#model_path = path + f_model_name
 
 # Chemin model sur git
-# model_path = 'best_model.pkl'
+model_path = 'best_model.pkl'
 
-# Chemin data en local
-# f_df_name = 'df.pkl'
-# df_path = path + f_df_name
 
-# Chemin data sur git
-# df_path = 'df.pkl'
-
-# f_df_total_name = 'df_total.pkl'
-# df_total_path = path + f_df_total_name
-#
-# f_X_total_name = 'X_total.pkl'
-# X_total_path = path + f_X_total_name
-#
-# f_y_total_name = 'y_total.pkl'
-# y_total_path = path + f_y_total_name
-
-# Les fichiers data sont trop importants, en chargeant juste "df", on se retrouve à dépasser la limite de 500MB sur Heroku.
+# Tentative de charger "df.pkl" sur Git. Les fichiers data sont trop importants, en chargeant juste "df", on se retrouve à dépasser la limite de 500MB sur Heroku.
 # On ets contraint de procéder autrement. On va charger les deux fichiers ".csv" et faire dans l'api les traitements nécessaires
+# Idée abandonnée. Autre solution: charger les fichiers "csv"
 
-# 1. Chargeemnt des data ".csv"
+# 1. Chargement des data ".csv" en local
 # nrows = 731 * 50
-path = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/data'
-df_1 = pd.read_csv(path + '/' + 'equipment_failure_data_1.csv', sep=';')  # nrows = nrows
-df_2 = pd.read_csv(path + '/' + 'equipment_failure_data_2.csv', sep=';')
+# path = '/Users/olivierdebeyssac/Python_project_predictive_maintenance/data'
+# df_1 = pd.read_csv(path + '/' + 'equipment_failure_data_1.csv', sep=';')  # nrows = nrows
+# df_2 = pd.read_csv(path + '/' + 'equipment_failure_data_2.csv', sep=';')
+
+# 2. Noms fichiers data et chemins data
+data_1 = 'equipment_failure_data_1.csv'
+data_2 = 'equipment_failure_data_2.csv'
+
+path_1 = path + data_1
+path_2 = path + data_2
+
+# 3. Chargement data
+df_1 = pd.read_csv(path_1, sep=';')
+df_2 = pd.read_csv(path_2, sep=';')
+
 
 # 2. Concaténation des deux df
 df = pd.concat([df_1, df_2], axis=0)
 print("df: {}".format(df[0:2]))
 print("df_shape: {}".format(df.shape))
+
 
 # 3. Nombre de records par équipement (quelle est la fréquence de remontée data/eq.)
 df['DATE'] = pd.to_datetime(df['DATE'], format='%d/%m/%y')
@@ -61,9 +64,11 @@ print(df['DATE'].dtypes)
 df_100001 = df[df['ID'] == 100001]
 print("On a {} remontées de data par équipement".format(df_100001.shape[0]))
 
+
 # 4. Filtrer les colonnes pour ne retenir que les colonnes correspondant aux capteurs.
 filter_col = [col for col in df if col.startswith('S')]
 print(filter_col)
+
 
 # 5. Process de transformation, feature engineering.
 # Principe:
@@ -84,9 +89,11 @@ def trigger_eq(df):
 # Create new feature: 'TIME_SINCE_START' that gives time between equipment appears and current time.
 dfx = trigger_eq(df)
 
+
 # Identify equipment change in our dataset and its associated set up date.
 df_starter = dfx[dfx['flipper'] == 1]
 df_starter = df_starter[['DATE', 'ID']]
+
 
 # rename date to start_date
 df_starter = df_starter.rename(index=str, columns={"DATE": "START_DATE"})
@@ -99,10 +106,12 @@ df_starter = df_starter.sort_values(by=['ID'], ascending=[True])
 dfx = dfx.merge(df_starter, on=['ID'], how='left')
 print("dfx.head(3): {}".format(dfx.head(3)))
 
+
 # Calcul du nombre de jours entre la date d'appartion de l'équipement and le jour actuel.
 # Cette feature sera libellée "TIME_SINCE_START”.
 # Création d'une nouvelle variable "too_soon". Lorsque cette variable=1, on a moins de 21 jours d'historique sur cet équipement.
 # Pour chaque équipement, lorsque "too_soon" est différent de 1 (autrement dit des que l'équipement est en place depuis plus de 21 jours) on va calculer certaines valeurs spécifiques pour chaque capteur: moyenne, médiane, min, max
+
 
 # calculate the number of days since the beginning of each well.
 dfx['C'] = dfx['DATE'] - dfx['START_DATE']
@@ -110,6 +119,7 @@ dfx['TIME_SINCE_START'] = dfx['C'] / np.timedelta64(1, 'D')
 dfx = dfx.drop(columns=['C'])
 dfx['too_soon'] = np.where((dfx.TIME_SINCE_START < feature_window), 1, 0)
 print(dfx[['TIME_SINCE_START', 'too_soon']][728:733])
+
 
 # 6. Calcul des valeurs spécifiques.
 l_suff = ['mean_val', 'med_val', 'min_val', 'max_val']
@@ -171,6 +181,7 @@ df = peak_val(new_dfx)
 # Dans cet objectif, on va considérer que la survenance de la panne qui a eu lieu à une date donnée aurait pu se produire dans les 28 jours qui ont précédé la panne.
 # On va donc augmenter artificiellement le taux de panne.
 
+
 # 1ère étape: équilibrage par extension de la fenètre d'obseravtion.
 window_tgt = 28
 df = df.sort_values(by=['ID', 'DATE'], ascending=[True, True])
@@ -179,22 +190,28 @@ df_failure = df[df['EQUIPMENT_FAILURE'] == 1]
 df_failure = df_failure[['DATE', 'ID']]
 df_failure = df_failure.rename(columns={'DATE': 'FAILURE_DATE'})
 
+
 df.sort_values(by='ID', inplace=True, ascending=True)
 df_failure.sort_values(by='ID', inplace=True, ascending=True)
 
+
 df_merged = df.merge(df_failure, on='ID', how='left')
+
 
 df_merged['TIME_TO_FAILURE'] = df_merged['FAILURE_DATE'] - df_merged['START_DATE']
 df_merged['TIME_TO_FAILURE'] = df_merged['TIME_TO_FAILURE'] / np.timedelta64(1, 'D')
+
 
 # Check...
 print("df['TIME_TO_FAILURE'][0:2]: {}".format(df_merged['TIME_TO_FAILURE'][0:2]))
 print(df_merged.loc[1, ['ID', 'START_DATE', 'DATE', 'FAILURE_DATE', 'TIME_TO_FAILURE']])
 
+
 df_merged['FAILURE_TGT'] = np.where((df_merged['TIME_TO_FAILURE'] < window_tgt) & (df_merged['TIME_TO_FAILURE'] >= 0), 1, 0)
 # Comptage des valeurs 0 et 1:
 print('Nombre de valeurs à 0: {}'.format(df_merged['FAILURE_TGT'].value_counts()[0] / len(df_merged)))
 print('Nombre de valeurs à 1: {}'.format(df_merged['FAILURE_TGT'].value_counts()[1] / len(df_merged)))
+
 
 # 2ème étape: utilisation de SMOTE pour meilleur équilibrage du dataset.
 # on définit une méthode pour déterminer qu'une observation fera partie du train set, du validation ou du test set.
@@ -204,34 +221,40 @@ print('Nombre de valeurs à 1: {}'.format(df_merged['FAILURE_TGT'].value_counts(
 # Ceci fait, on a alors un ensemble de mesures pour un équipement donné qui servira à l'entrainement et d'autres à la validation ou au test.
 # Puis, en faisant un merge des df "pd_id" et "df", on obtient un df pour lequel tous les équipements sont tagés "Training", ou "Test".
 
+
 # Get a Unique List of All IDs
 df_temp = df_merged
 df_id = df_temp.drop_duplicates(subset='ID')
 df_id = df_id[['ID']]
 
+
 np.random.seed(42)
 df_id['random_val'] = (np.random.randint(0, 10000, df_id.shape[0])) / 10000
 df_id = df_id[['ID', 'random_val']]
+
 
 df_id['MODELING_GROUP'] = np.where((df_id.random_val <= 0.35), 'TRAINING',
                                    np.where((df_id.random_val <= 0.65), 'VALIDATION', 'TESTING'))
 print(df_id.head(10))
 
+
 tips_summed = df_id.groupby(['MODELING_GROUP'])['random_val'].count()
 print(tips_summed)
+
 
 # Attribution des tag à chaque équipement, merge des df.
 df_merged = df_merged.sort_values(by=['ID'], ascending=[True])
 df_id = df_id.sort_values(by=['ID'], ascending=[True])
 new_df = df_merged.merge(df_id, on=['ID'], how='inner')
 
+
 tips_summed_1 = new_df.groupby(['MODELING_GROUP'])['random_val'].count()
 print(tips_summed_1)
 
 # Méthode SMOTE pour équilibrage du dataset.
 # Disparité des valeurs de défaillance et non défaillance.
-
 print(new_df['EQUIPMENT_FAILURE'].value_counts())
+
 
 # Features non nécessaires à l'entrainement des modèles mais nécessaires dans des phases ulérieures: les dates.
 features = ['ID', 'MODELING_GROUP', 'EQUIPMENT_FAILURE',
@@ -249,8 +272,8 @@ features = ['ID', 'MODELING_GROUP', 'EQUIPMENT_FAILURE',
             'S8_min_val', 'S8_max_val', 'S15_peak', 'S17_peak', 'S13_peak',
             'S5_peak', 'S16_peak', 'S19_peak', 'S18_peak', 'S8_peak']
 
-# Features nécéssaires à l'entrainement des modèles.
 
+# Features nécéssaires à l'entrainement des modèles.
 training_features = ['ID', 'EQUIPMENT_FAILURE',
                      'TIME_SINCE_START', 'TIME_TO_FAILURE', 'FAILURE_TGT',
                      'S15', 'S17', 'S13', 'S5', 'S16', 'S19', 'S18',
@@ -264,6 +287,7 @@ training_features = ['ID', 'EQUIPMENT_FAILURE',
                      'S18_min_val', 'S18_max_val', 'S8_mean_val', 'S8_med_val',
                      'S8_min_val', 'S8_max_val', 'S15_peak', 'S17_peak', 'S13_peak',
                      'S5_peak', 'S16_peak', 'S19_peak', 'S18_peak', 'S8_peak']
+
 
 # Construction des data sets.
 df_features = new_df[features]
@@ -292,7 +316,6 @@ def get_df():
     print(df_features.columns)
     d_df = df_features.to_dict()
     json_format = jsonify(d_df)
-
     return json_format
 
 
@@ -342,7 +365,6 @@ def get_sensors_data(id):
 
 
 # Construction fonction qui renvoie X_test.
-
 @app.route('/X_test/<id>', methods=['GET'])
 def X_test_data(id):
 
