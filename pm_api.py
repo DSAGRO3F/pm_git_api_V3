@@ -58,6 +58,7 @@ print("df_shape: {}".format(df.shape))
 
 
 # 3. Nombre de records par équipement (quelle est la fréquence de remontée data/eq.)
+df['DATE'] = df['DATE'].astype('str')
 df['DATE'] = pd.to_datetime(df['DATE'], format='%d/%m/%y')
 print(df['DATE'][0:2])
 print(df['DATE'].dtypes)
@@ -88,8 +89,7 @@ def trigger_eq(df):
 
 # Create new feature: 'TIME_SINCE_START' that gives time between equipment appears and current time.
 dfx = trigger_eq(df)
-dfx['DATE'] = dfx['DATE'].astype('str')
-dfx['DATE'] = pd.to_datetime(dfx['DATE'], format='%d/%m/%y')
+
 
 # Identify equipment change in our dataset and its associated set up date.
 df_starter = dfx[dfx['flipper'] == 1]
@@ -173,7 +173,7 @@ def peak_val(new_dfx):
     return new_dfx
 
 
-df = peak_val(new_dfx)
+df_peak = peak_val(new_dfx)
 
 # 8. Equilibrage du dataset.
 # Commentaire:
@@ -185,18 +185,18 @@ df = peak_val(new_dfx)
 
 # 1ère étape: équilibrage par extension de la fenètre d'obseravtion.
 window_tgt = 28
-df = df.sort_values(by=['ID', 'DATE'], ascending=[True, True])
-df.reset_index(drop=True, inplace=True)
-df_failure = df[df['EQUIPMENT_FAILURE'] == 1]
+df_peak = df_peak.sort_values(by=['ID', 'DATE'], ascending=[True, True])
+df_peak.reset_index(drop=True, inplace=True)
+df_failure = df_peak[df_peak['EQUIPMENT_FAILURE'] == 1]
 df_failure = df_failure[['DATE', 'ID']]
 df_failure = df_failure.rename(columns={'DATE': 'FAILURE_DATE'})
 
 
-df.sort_values(by='ID', inplace=True, ascending=True)
+df_peak.sort_values(by='ID', inplace=True, ascending=True)
 df_failure.sort_values(by='ID', inplace=True, ascending=True)
 
 
-df_merged = df.merge(df_failure, on='ID', how='left')
+df_merged = df_peak.merge(df_failure, on='ID', how='left')
 
 
 df_merged['TIME_TO_FAILURE'] = df_merged['FAILURE_DATE'] - df_merged['START_DATE']
