@@ -88,7 +88,8 @@ def trigger_eq(df):
 
 # Create new feature: 'TIME_SINCE_START' that gives time between equipment appears and current time.
 dfx = trigger_eq(df)
-
+dfx['DATE'] = dfx['DATE'].astype('str')
+dfx['DATE'] = pd.to_datetime(dfx['DATE'], format='%d/%m/%y')
 
 # Identify equipment change in our dataset and its associated set up date.
 df_starter = dfx[dfx['flipper'] == 1]
